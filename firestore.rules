@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isCouple() {
+      return request.auth != null
+        && request.auth.uid in [
+          "HyPUAmwgY7OmD4uGk6UhvXXcPag1",
+          "rpOihQUHWjhgMSPNTuGX9yHedXG2"
+        ];
+    }
+
+    match /months/{monthId} {
+      allow read, create, update: if isCouple();
+      allow delete: if false;
+    }
+
+    match /expenses/{expenseId} {
+      allow read, create, delete: if isCouple();
+      allow update: if false;
+    }
+  }
+}
