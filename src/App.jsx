@@ -6,7 +6,6 @@ import {
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -16,236 +15,414 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
-const MONTH_NAMES = [
-  "Tháng Một","Tháng Hai","Tháng Ba","Tháng Tư","Tháng Năm","Tháng Sáu",
-  "Tháng Bảy","Tháng Tám","Tháng Chín","Tháng Mười","Tháng Mười Một","Tháng Mười Hai",
-];
+const MONEY = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
+  maximumFractionDigits: 0,
+});
 
 const PEOPLE = {
-  "HyPUAmwgY7OmD4uGk6UhvXXcPag1": { name: "Bạn", accent: "#C4694F", soft: "#F1DFD6" },
-  "rpOihQUHWjhgMSPNTuGX9yHedXG2": { name: "Người yêu", accent: "#4A7C74", soft: "#DCE7E4" },
+  // Đổi UID thành UID thật của 2 tài khoản Firebase.
+  "HyPUAmwgY7OmD4uGk6UhvXXcPag1": "Bạn",
+  "rpOihQUHWjhgMSPNTuGX9yHedXG2": "Người yêu",
 };
 
-const MONEY = (n) => `${(Math.round(Number(n) || 0)).toLocaleString("vi-VN")}₫`;
-const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-const todayISO = () => new Date().toISOString().slice(0,10);
-const fmtDate = (iso) => {
-  if (!iso) return "";
-  const [y,m,d] = iso.split("-");
-  return `${d}/${m}`;
-};
-const parseAmount = (s) => {
-  const cleaned = String(s).replace(/[^\d]/g, "");
-  return cleaned ? parseInt(cleaned, 10) : 0;
-};
+function monthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(key) {
+  const [year, month] = key.split("-");
+  return `Tháng ${Number(month)}/${year}`;
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function getDisplayName(user) {
+  return PEOPLE[user.uid] || user.email?.split("@")[0] || "Bạn";
+}
 
 function Login() {
-  const [email,setEmail]=React.useState("");
-  const [password,setPassword]=React.useState("");
-  const [loading,setLoading]=React.useState(false);
-  const [error,setError]=React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
 
-  async function submit(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    setLoading(true); setError("");
-    try { await signInWithEmailAndPassword(auth,email,password); }
-    catch { setError("Email hoặc mật khẩu chưa đúng."); }
-    finally { setLoading(false); }
+    setError("");
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch {
+      setError("Email hoặc mật khẩu chưa đúng.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="page-center">
-      <div className="login-card">
-        <div className="wallet-mark">◒</div>
-        <div className="eyebrow">OUR SHARED LEDGER</div>
-        <h1>Quỹ chung</h1>
-        <p>Đăng nhập để cùng ghi chép những khoản chi của hai bạn.</p>
-        <form onSubmit={submit}>
-          <label>Email</label>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email của bạn" required />
-          <label>Mật khẩu</label>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" required />
-          {error && <div className="error">{error}</div>}
-          <button className="dark-btn full" disabled={loading}>{loading ? "Đang vào sổ..." : "Đăng nhập"}</button>
-        </form>
-      </div>
-    </div>
+    <main className="login-page">
+      <form className="login-card" onSubmit={handleLogin}>
+        <div className="logo">♥</div>
+        <h1>Quỹ của chúng mình</h1>
+        <p>Đăng nhập để cùng quản lý chi tiêu tháng này.</p>
+
+        <label>Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          required
+        />
+
+        <label>Mật khẩu</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          required
+        />
+
+        {error && <div className="error">{error}</div>}
+
+        <button className="primary full" disabled={loading}>
+          {loading ? "Đang đăng nhập…" : "Đăng nhập"}
+        </button>
+      </form>
+    </main>
   );
 }
 
-export default function App({ user }) {
+function App({ user }) {
   if (!user) return <Login />;
 
-  const now = new Date();
-  const mKey = monthKey(now);
-  const person = PEOPLE[user.uid] || {name:"Bạn",accent:"#C4694F",soft:"#F1DFD6"};
+  const currentMonth = monthKey();
+  const today = new Date().toISOString().slice(0, 10);
+  const displayName = getDisplayName(user);
 
-  const [budget,setBudget]=React.useState(null);
-  const [expenses,setExpenses]=React.useState([]);
-  const [loaded,setLoaded]=React.useState(false);
-  const [error,setError]=React.useState("");
-  const [showBudgetForm,setShowBudgetForm]=React.useState(false);
-  const [budgetInput,setBudgetInput]=React.useState("");
-  const [amountInput,setAmountInput]=React.useState("");
-  const [dateInput,setDateInput]=React.useState(todayISO());
-  const [noteInput,setNoteInput]=React.useState("");
-  const [spenderId,setSpenderId]=React.useState(user.uid);
-  const [saving,setSaving]=React.useState(false);
+  const [fund, setFund] = React.useState(0);
+  const [fundLoaded, setFundLoaded] = React.useState(false);
+  const [expenses, setExpenses] = React.useState([]);
+  const [showFundModal, setShowFundModal] = React.useState(false);
+  const [showExpenseModal, setShowExpenseModal] = React.useState(false);
+  const [fundInput, setFundInput] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [amount, setAmount] = React.useState("");
+  const [date, setDate] = React.useState(today);
+  const [payer, setPayer] = React.useState(user.uid);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
 
-  React.useEffect(()=>{
-    const ref=doc(db,"months",mKey);
-    return onSnapshot(ref,snap=>{
-      const data=snap.exists()?snap.data():null;
-      setBudget(data);
-      setBudgetInput(data ? String(data.fund || 0) : "");
-      setLoaded(true);
-      if(!data) setShowBudgetForm(true);
-    },()=>setError("Không thể đọc quỹ tháng này."));
-  },[mKey]);
+  React.useEffect(() => {
+    const monthRef = doc(db, "months", currentMonth);
 
-  React.useEffect(()=>{
-    const q=query(collection(db,"expenses"),orderBy("date","desc"));
-    return onSnapshot(q,snap=>{
-      setExpenses(snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.month===mKey));
-    },()=>setError("Không thể đọc danh sách khoản chi."));
-  },[mKey]);
+    return onSnapshot(
+      monthRef,
+      (snap) => {
+        if (snap.exists()) {
+          const value = Number(snap.data().fund || 0);
+          setFund(value);
+          setFundInput(String(value));
+          setShowFundModal(false);
+        } else {
+          setFund(0);
+          setFundInput("");
+          setShowFundModal(true);
+        }
+        setFundLoaded(true);
+      },
+      () => setError("Không thể đọc dữ liệu quỹ tháng này.")
+    );
+  }, [currentMonth]);
 
-  const totalBudget=Number(budget?.fund||0);
-  const totalSpent=expenses.reduce((s,x)=>s+Number(x.amount||0),0);
-  const remaining=totalBudget-totalSpent;
-  const spentPct=totalBudget>0?Math.min(100,(totalSpent/totalBudget)*100):0;
+  React.useEffect(() => {
+    const q = query(
+      collection(db, "expenses"),
+      orderBy("date", "desc")
+    );
 
-  async function saveBudget(e){
+    return onSnapshot(
+      q,
+      (snap) => {
+        const all = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((x) => x.month === currentMonth);
+        setExpenses(all);
+      },
+      () => setError("Không thể đọc danh sách chi tiêu.")
+    );
+  }, [currentMonth]);
+
+  const spent = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const remaining = fund - spent;
+
+  async function saveFund(e) {
     e.preventDefault();
-    const amount=parseAmount(budgetInput);
-    if(!amount) return;
-    setSaving(true); setError("");
-    try{
-      await setDoc(doc(db,"months",mKey),{
-        fund:amount,month:mKey,updatedBy:user.uid,updatedByName:person.name,updatedAt:serverTimestamp()
-      },{merge:true});
-      setShowBudgetForm(false);
-    }catch{setError("Không lưu được quỹ. Kiểm tra Firestore Rules.");}
-    finally{setSaving(false);}
+    const value = Number(fundInput);
+
+    if (!Number.isFinite(value) || value < 0) {
+      setError("Hãy nhập số tiền hợp lệ.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await setDoc(
+        doc(db, "months", currentMonth),
+        {
+          fund: value,
+          month: currentMonth,
+          updatedBy: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      setShowFundModal(false);
+    } catch {
+      setError("Không thể lưu quỹ. Kiểm tra Firestore Rules.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function addExpense(e){
+  async function addExpense(e) {
     e.preventDefault();
-    const amount=parseAmount(amountInput);
-    if(!amount || !dateInput) return;
-    setSaving(true); setError("");
-    const spender=PEOPLE[spenderId]||person;
-    try{
-      await addDoc(collection(db,"expenses"),{
-        month:mKey,amount,note:noteInput.trim(),date:dateInput,
-        payerUid:spenderId,payerName:spender.name,createdBy:user.uid,createdAt:serverTimestamp()
+    const value = Number(amount);
+
+    if (!Number.isFinite(value) || value <= 0) {
+      setError("Hãy nhập khoản chi lớn hơn 0.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await addDoc(collection(db, "expenses"), {
+        month: currentMonth,
+        amount: value,
+        note: note.trim() || "Khoản chi",
+        date,
+        payerUid: payer,
+        payerName: PEOPLE[payer] || (payer === user.uid ? displayName : "Người yêu"),
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
       });
-      setAmountInput(""); setNoteInput(""); setDateInput(todayISO()); setSpenderId(user.uid);
-    }catch{setError("Không thêm được khoản chi.");}
-    finally{setSaving(false);}
+
+      setNote("");
+      setAmount("");
+      setDate(today);
+      setPayer(user.uid);
+      setShowExpenseModal(false);
+    } catch {
+      setError("Không thể lưu khoản chi.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function removeExpense(id){
-    setSaving(true); setError("");
-    try{ await deleteDoc(doc(db,"expenses",id)); }
-    catch{setError("Không xoá được khoản chi. Kiểm tra Rules.");}
-    finally{setSaving(false);}
+  if (!fundLoaded) {
+    return <div className="loading">Đang tải quỹ tháng này…</div>;
   }
-
-  if(!loaded) return <div className="loading"><span className="spinner">◌</span></div>;
 
   return (
-    <div className="app">
-      <main className="shell">
-        <header className="header">
-          <div>
-            <div className="eyebrow mono">{MONTH_NAMES[now.getMonth()]} {now.getFullYear()}</div>
-            <h1>Quỹ chung</h1>
+    <div className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="eyebrow">OUR LITTLE FUND</div>
+          <h1>Quỹ của chúng mình 💕</h1>
+          <div className="month">{monthLabel(currentMonth)}</div>
+        </div>
+
+        <div className="header-actions">
+          <span className="user-pill">{displayName}</span>
+          <button className="ghost" onClick={() => signOut(auth)}>Đăng xuất</button>
+        </div>
+      </header>
+
+      <main className="content">
+        {error && (
+          <div className="error banner">
+            {error}
+            <button onClick={() => setError("")}>×</button>
           </div>
-          <button className="switch-user" onClick={()=>signOut(auth)}>
-            <span className="dot" style={{background:person.accent}} />
-            {person.name}
-            <span className="switch-icon">⇄</span>
-          </button>
-        </header>
-
-        <section className="ledger-card">
-          <div className="ledger-stats">
-            <div>
-              <span className="stat-label">Tổng quỹ</span>
-              <strong>{MONEY(totalBudget)}</strong>
-            </div>
-            <div>
-              <span className="stat-label">Đã chi</span>
-              <strong className="spent">{MONEY(totalSpent)}</strong>
-            </div>
-            <div>
-              <span className="stat-label">Còn lại</span>
-              <strong className={remaining<0?"over":"left"}>{MONEY(remaining)}</strong>
-            </div>
-          </div>
-
-          <div className="progress"><div style={{width:`${spentPct}%`,background:remaining<0?"#C4694F":"#C9A468"}} /></div>
-
-          <div className="ledger-foot">
-            <span className="muted mono">
-              {budget ? `Thiết lập bởi ${budget.updatedByName || "một trong hai bạn"}` : "Chưa thiết lập quỹ tháng này"}
-            </span>
-            <button className="text-btn" onClick={()=>{setBudgetInput(budget?String(budget.fund):"");setShowBudgetForm(true)}}>✎ {budget?"Điều chỉnh":"Thiết lập"}</button>
-          </div>
-          <i className="notch left-notch"/><i className="notch right-notch"/>
-        </section>
-
-        {showBudgetForm && (
-          <form className="budget-form" onSubmit={saveBudget}>
-            <div className="form-grow">
-              <label className="dark-label mono">Quỹ {MONTH_NAMES[now.getMonth()].toLowerCase()} là bao nhiêu?</label>
-              <input inputMode="numeric" value={budgetInput} onChange={e=>setBudgetInput(e.target.value)} placeholder="VD: 15000000" autoFocus />
-            </div>
-            <div className="form-actions">
-              <button className="gold-btn" disabled={saving || !parseAmount(budgetInput)}>Lưu</button>
-              {budget && <button type="button" className="cancel-btn" onClick={()=>setShowBudgetForm(false)}>Huỷ</button>}
-            </div>
-          </form>
         )}
 
-        <form className="expense-form" onSubmit={addExpense}>
-          <input inputMode="numeric" value={amountInput} onChange={e=>setAmountInput(e.target.value)} placeholder="Số tiền" />
-          <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)} />
-          <select value={spenderId} onChange={e=>setSpenderId(e.target.value)}>
-            {Object.entries(PEOPLE).map(([id,p])=><option key={id} value={id}>{p.name} chi</option>)}
-          </select>
-          <input className="note-input" value={noteInput} onChange={e=>setNoteInput(e.target.value)} placeholder="Ghi chú (không bắt buộc)" />
-          <button className="add-btn" style={{background:person.accent}} disabled={saving || !parseAmount(amountInput)}>＋ Thêm</button>
-        </form>
-
-        {error && <div className="error error-wide">{error}<button onClick={()=>setError("")}>×</button></div>}
-
-        <section className="list-card">
-          <div className="list-head">
-            <span>Danh sách khoản chi</span>
-            <span className="muted mono">{expenses.length} khoản</span>
+        <section className="summary-grid">
+          <div className="summary-card fund">
+            <span>Tổng tiền tháng này</span>
+            <strong>{MONEY.format(fund)}</strong>
+            <button onClick={() => setShowFundModal(true)}>Điều chỉnh quỹ</button>
           </div>
-          {expenses.length===0 ? (
-            <div className="empty">Chưa có khoản chi nào trong tháng này.</div>
-          ) : (
+
+          <div className="summary-card">
+            <span>Đã chi</span>
+            <strong>{MONEY.format(spent)}</strong>
+            <small>{expenses.length} khoản chi</small>
+          </div>
+
+          <div className={`summary-card ${remaining < 0 ? "negative" : "remaining"}`}>
+            <span>Còn lại</span>
+            <strong>{MONEY.format(remaining)}</strong>
+            <small>{remaining < 0 ? "Đã vượt quỹ" : "Vẫn còn trong quỹ"}</small>
+          </div>
+        </section>
+
+        <section className="expenses-section">
+          <div className="section-heading">
             <div>
-              {[...expenses].sort((a,b)=>a.date<b.date?1:-1).map(x=>{
-                const p=PEOPLE[x.payerUid]||{name:x.payerName||"Không rõ",accent:"#8A8172",soft:"#E3DBC8"};
-                return (
-                  <div className="expense-row" key={x.id}>
-                    <span className="date mono">{fmtDate(x.date)}</span>
-                    <span className="person-chip" style={{background:p.soft,color:p.accent}}>{p.name}</span>
-                    <span className="note">{x.note || <em>Không có ghi chú</em>}</span>
-                    <span className="amount mono">{MONEY(x.amount)}</span>
-                    <button className="delete-btn" onClick={()=>removeExpense(x.id)} title="Xoá">×</button>
-                  </div>
-                )
-              })}
+              <h2>Chi tiêu tháng này</h2>
+              <p>Ai chi, chi gì, bao nhiêu và vào ngày nào đều nằm ở đây.</p>
             </div>
-          )}
+            <button className="primary" onClick={() => setShowExpenseModal(true)}>
+              + Thêm khoản chi
+            </button>
+          </div>
+
+          <div className="expense-list">
+            {expenses.length === 0 ? (
+              <div className="empty">
+                <div className="empty-icon">🧾</div>
+                <h3>Chưa có khoản chi nào</h3>
+                <p>Chiếc quỹ đang sạch bong. Thêm khoản đầu tiên nhé.</p>
+              </div>
+            ) : (
+              expenses.map((item) => (
+                <div className="expense-row" key={item.id}>
+                  <div className="expense-icon">₫</div>
+                  <div className="expense-main">
+                    <strong>{item.note}</strong>
+                    <span>
+                      {item.payerName || "Không rõ"} · {formatDate(item.date)}
+                    </span>
+                  </div>
+                  <strong className="expense-amount">
+                    -{MONEY.format(Number(item.amount))}
+                  </strong>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       </main>
+
+      {showFundModal && (
+        <div className="modal-backdrop">
+          <form className="modal" onSubmit={saveFund}>
+            <div className="modal-top">
+              <div>
+                <span className="eyebrow">NEW MONTH</span>
+                <h2>Quỹ tháng này là bao nhiêu?</h2>
+              </div>
+              <button type="button" className="close" onClick={() => fundLoaded && fund > 0 && setShowFundModal(false)}>×</button>
+            </div>
+
+            <p>
+              Chỉ cần một người nhập. Sau khi lưu, cả hai tài khoản sẽ nhìn thấy cùng một số tiền.
+            </p>
+
+            <label>Tổng quỹ tháng</label>
+            <div className="money-input">
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                step="1000"
+                value={fundInput}
+                onChange={(e) => setFundInput(e.target.value)}
+                placeholder="Ví dụ: 10000000"
+                required
+              />
+              <span>VNĐ</span>
+            </div>
+
+            <button className="primary full" disabled={saving}>
+              {saving ? "Đang lưu…" : "Lưu quỹ tháng"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {showExpenseModal && (
+        <div className="modal-backdrop">
+          <form className="modal" onSubmit={addExpense}>
+            <div className="modal-top">
+              <div>
+                <span className="eyebrow">NEW EXPENSE</span>
+                <h2>Thêm khoản chi</h2>
+              </div>
+              <button type="button" className="close" onClick={() => setShowExpenseModal(false)}>×</button>
+            </div>
+
+            <label>Khoản chi</label>
+            <input
+              autoFocus
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ví dụ: Ăn tối, tiền điện…"
+              required
+            />
+
+            <label>Số tiền</label>
+            <div className="money-input">
+              <input
+                type="number"
+                min="1"
+                step="1000"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="150000"
+                required
+              />
+              <span>VNĐ</span>
+            </div>
+
+            <label>Ai là người chi?</label>
+            <div className="people">
+              <button
+                type="button"
+                className={payer === user.uid ? "person active" : "person"}
+                onClick={() => setPayer(user.uid)}
+              >
+                <span>👤</span>
+                {displayName}
+              </button>
+
+              <button
+                type="button"
+                className={payer !== user.uid ? "person active" : "person"}
+                onClick={() => setPayer(user.uid === "HyPUAmwgY7OmD4uGk6UhvXXcPag1" ? "rpOihQUHWjhgMSPNTuGX9yHedXG2" : "HyPUAmwgY7OmD4uGk6UhvXXcPag1")}
+              >
+                <span>💕</span>
+                {user.uid === "HyPUAmwgY7OmD4uGk6UhvXXcPag1" ? "Người yêu" : "Người yêu"}
+              </button>
+            </div>
+
+            <label>Ngày chi</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+
+            <button className="primary full" disabled={saving}>
+              {saving ? "Đang lưu…" : "Lưu khoản chi"}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
+
+export default App;
