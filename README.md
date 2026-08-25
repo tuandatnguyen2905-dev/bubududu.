@@ -126,3 +126,9 @@ expenses
 Mỗi tháng dùng một document riêng, ví dụ `2026-08`, `2026-09`.
 
 Vì vậy khi sang tháng mới, website tự thấy document tháng đó chưa tồn tại và hỏi hai bạn nhập quỹ mới.
+
+
+## Nếu website chỉ hiện vòng tròn loading
+Mở F12 → Console để xem lỗi Firestore. Bản này không còn treo vô hạn khi Firestore trả lỗi; màn hình sẽ hiển thị mã lỗi để dễ sửa.
+
+Đảm bảo trong Firebase: Firestore Database đã được tạo, Firestore Rules đã Publish, và tài khoản đang đăng nhập thuộc đúng một trong hai UID được phép.
