@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // THAY 2 UID dưới đây bằng UID của đúng 2 tài khoản của hai bạn.
+    function isCouple() {
+      return request.auth != null
+        && request.auth.uid in [
+          "USER_1_UID",
+          "USER_2_UID"
+        ];
+    }
+
+    match /months/{monthId} {
+      allow read, create, update: if isCouple();
+      allow delete: if false;
+    }
+
+    match /expenses/{expenseId} {
+      allow read, create: if isCouple();
+      allow update, delete: if false;
+    }
+  }
+}
