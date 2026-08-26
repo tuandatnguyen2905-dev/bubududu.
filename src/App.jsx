@@ -386,7 +386,7 @@ function Dashboard({ user }) {
                 autoFocus
                 type="number"
                 min="0"
-                step="1000"
+                step="1"
                 value={fundInput}
                 onChange={(e) => setFundInput(e.target.value)}
                 placeholder="Ví dụ: 10000000"
@@ -427,7 +427,7 @@ function Dashboard({ user }) {
               <input
                 type="number"
                 min="1"
-                step="1000"
+                step="1"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="150000"
