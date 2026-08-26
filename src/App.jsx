@@ -53,10 +53,23 @@ function Login() {
     setError("");
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
     } catch (err) {
       console.error("Login error:", err);
-      setError("Email hoặc mật khẩu chưa đúng.");
+
+      const code = err?.code || "";
+      const messages = {
+        "auth/invalid-credential": "Email hoặc mật khẩu không đúng, hoặc tài khoản chưa tồn tại trong Firebase project này.",
+        "auth/wrong-password": "Mật khẩu không đúng.",
+        "auth/user-not-found": "Không tìm thấy tài khoản email này trong Firebase.",
+        "auth/invalid-email": "Email không đúng định dạng.",
+        "auth/user-disabled": "Tài khoản này đang bị vô hiệu hóa trong Firebase.",
+        "auth/too-many-requests": "Có quá nhiều lần đăng nhập thất bại. Hãy chờ một lúc rồi thử lại.",
+        "auth/network-request-failed": "Không kết nối được tới Firebase. Hãy kiểm tra Internet.",
+        "auth/operation-not-allowed": "Đăng nhập bằng Email/Password chưa được bật trong Firebase Authentication."
+      };
+
+      setError(messages[code] || `Đăng nhập thất bại (${code || "unknown-error"}). Hãy mở Console để xem chi tiết.`);
     } finally {
       setLoading(false);
     }
@@ -97,8 +110,7 @@ function Login() {
   );
 }
 
-function App({ user }) {
-  if (!user) return <Login />;
+function Dashboard({ user }) {
 
   const currentMonth = monthKey();
   const today = new Date().toISOString().slice(0, 10);
@@ -445,6 +457,10 @@ function App({ user }) {
       )}
     </div>
   );
+}
+
+function App({ user }) {
+  return user ? <Dashboard user={user} /> : <Login />;
 }
 
 export default App;

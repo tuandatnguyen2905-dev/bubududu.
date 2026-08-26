@@ -26,3 +26,7 @@ Website nhỏ để hai người cùng quản lý quỹ và chi tiêu theo thán
 4. Framework: Vite.
 5. Build command: `npm run build`.
 6. Output directory: `dist`.
+
+
+## Login troubleshooting
+The login screen now shows the Firebase Authentication error code instead of a generic message. If login fails, check Firebase Console > Authentication > Users and verify the email belongs to the intended project. You can reset the user's password from the Firebase console if needed.
