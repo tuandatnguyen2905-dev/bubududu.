@@ -277,8 +277,7 @@ function Dashboard({ user }) {
       <div className="loading-page">
         <div className="loading-card">
           <div className="logo">♥</div>
-          <h2>Đang mở quỹ của chúng mình…</h2>
-          <p>Đang kết nối với Firebase.</p>
+          <h2>Đang mở quỹ chi tiêu cho bé…</h2>
           {error && (
             <div className="error loading-error">
               {error}
