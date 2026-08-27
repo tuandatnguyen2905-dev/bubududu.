@@ -1,4 +1,4 @@
-# Quỹ của chúng mình 💕
+# Quỹ chi tiêu cho bé💕
 
 Website nhỏ để hai người cùng quản lý quỹ và chi tiêu theo tháng.
 
