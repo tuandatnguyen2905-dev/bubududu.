@@ -295,7 +295,7 @@ function Dashboard({ user }) {
       <header className="topbar">
         <div>
           <div className="eyebrow">OUR LITTLE FUND</div>
-          <h1>Quỹ của chúng mình 💕</h1>
+          <h1>Quỹ chi tiêu cho bé 💕</h1>
           <div className="month">{monthLabel(currentMonth)}</div>
         </div>
 
