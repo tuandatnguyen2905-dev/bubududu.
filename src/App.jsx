@@ -23,13 +23,26 @@ const PEOPLE = {
   "rpOihQUHWjhgMSPNTuGX9yHedXG2": "Người yêu",
 };
 
-function monthKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+function cycleInfo(date = new Date()) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // Each budget cycle starts on the 25th and ends on the 24th of the next month.
+  const start = d.getDate() >= 25
+    ? new Date(d.getFullYear(), d.getMonth(), 25)
+    : new Date(d.getFullYear(), d.getMonth() - 1, 25);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 24);
+  const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  return { key, start, end };
 }
 
-function monthLabel(key) {
+function cycleKey(date = new Date()) {
+  return cycleInfo(date).key;
+}
+
+function cycleLabel(key) {
   const [year, month] = key.split("-");
-  return `Tháng ${Number(month)}/${year}`;
+  const start = new Date(Number(year), Number(month) - 1, 25);
+  const end = new Date(Number(year), Number(month), 24);
+  return `25/${String(start.getMonth() + 1).padStart(2, "0")}/${start.getFullYear()} – 24/${String(end.getMonth() + 1).padStart(2, "0")}/${end.getFullYear()}`;
 }
 
 function formatDate(value) {
@@ -112,8 +125,11 @@ function Login() {
 
 function Dashboard({ user }) {
 
-  const currentMonth = monthKey();
+  const cycle = cycleInfo();
+  const currentMonth = cycle.key;
   const today = new Date().toISOString().slice(0, 10);
+  const cycleStartDate = cycle.start.toISOString().slice(0, 10);
+  const cycleEndDate = cycle.end.toISOString().slice(0, 10);
   const displayName = getDisplayName(user);
   const partnerUid = user.uid === "HyPUAmwgY7OmD4uGk6UhvXXcPag1"
     ? "rpOihQUHWjhgMSPNTuGX9yHedXG2"
@@ -248,6 +264,12 @@ function Dashboard({ user }) {
     setError("");
 
     try {
+      if (date < cycleStartDate || date > cycleEndDate) {
+        setError(`Ngày chi phải nằm trong kỳ quỹ ${cycleLabel(currentMonth)}.`);
+        setSaving(false);
+        return;
+      }
+
       await addDoc(collection(db, "expenses"), {
         month: currentMonth,
         amount: value,
@@ -277,7 +299,8 @@ function Dashboard({ user }) {
       <div className="loading-page">
         <div className="loading-card">
           <div className="logo">♥</div>
-          <h2>Đang mở quỹ chi tiêu cho bé…</h2>
+          <h2>Đang mở quỹ của chúng mình…</h2>
+          <p>Đang kết nối với Firebase.</p>
           {error && (
             <div className="error loading-error">
               {error}
@@ -294,8 +317,8 @@ function Dashboard({ user }) {
       <header className="topbar">
         <div>
           <div className="eyebrow">OUR LITTLE FUND</div>
-          <h1>Quỹ chi tiêu cho bé 💕</h1>
-          <div className="month">{monthLabel(currentMonth)}</div>
+          <h1>Quỹ của chúng mình 💕</h1>
+          <div className="month">Kỳ quỹ: {cycleLabel(currentMonth)}</div>
         </div>
 
         <div className="header-actions">
@@ -335,8 +358,8 @@ function Dashboard({ user }) {
         <section className="expenses-section">
           <div className="section-heading">
             <div>
-              <h2>Chi tiêu tháng này</h2>
-              <p>Ai chi, chi gì, bao nhiêu và vào ngày nào đều nằm ở đây.</p>
+              <h2>Chi tiêu kỳ này</h2>
+              <p>Khoản chi được tính từ ngày 25 đến ngày 24 tháng sau.</p>
             </div>
             <button className="primary" onClick={() => setShowExpenseModal(true)}>
               + Thêm khoản chi
@@ -371,15 +394,15 @@ function Dashboard({ user }) {
           <form className="modal" onSubmit={saveFund}>
             <div className="modal-top">
               <div>
-                <span className="eyebrow">NEW MONTH</span>
-                <h2>Quỹ tháng này là bao nhiêu?</h2>
+                <span className="eyebrow">NEW FUND CYCLE</span>
+                <h2>Quỹ kỳ này là bao nhiêu?</h2>
               </div>
               <button type="button" className="close" onClick={() => fund > 0 && setShowFundModal(false)}>×</button>
             </div>
 
-            <p>Chỉ cần một người nhập. Sau khi lưu, cả hai tài khoản sẽ nhìn thấy cùng một số tiền.</p>
+            <p>Kỳ quỹ chạy từ ngày 25 đến ngày 24 tháng sau. Chỉ cần một người nhập, cả hai tài khoản sẽ nhìn thấy cùng một số tiền.</p>
 
-            <label>Tổng quỹ tháng</label>
+            <label>Tổng quỹ kỳ này</label>
             <div className="money-input">
               <input
                 autoFocus
@@ -395,7 +418,7 @@ function Dashboard({ user }) {
             </div>
 
             <button className="primary full" disabled={saving}>
-              {saving ? "Đang lưu…" : "Lưu quỹ tháng"}
+              {saving ? "Đang lưu…" : "Lưu quỹ kỳ này"}
             </button>
           </form>
         </div>
@@ -446,7 +469,7 @@ function Dashboard({ user }) {
             </div>
 
             <label>Ngày chi</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input type="date" min={cycleStartDate} max={cycleEndDate} value={date} onChange={(e) => setDate(e.target.value)} required />
 
             <button className="primary full" disabled={saving}>
               {saving ? "Đang lưu…" : "Lưu khoản chi"}

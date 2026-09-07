@@ -13,7 +13,7 @@ function Root() {
   }, []);
 
   if (user === undefined) {
-    return <div className="loading">Đang mở quỹ chi tiêu cho bé… 💕</div>;
+    return <div className="loading">Đang mở quỹ của chúng mình… 💕</div>;
   }
 
   return <App user={user} />;
